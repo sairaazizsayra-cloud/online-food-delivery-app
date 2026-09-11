@@ -328,6 +328,13 @@ class RestaurantMetaRow extends StatelessWidget {
   }
 }
 
+const foodCardGridDelegate = SliverGridDelegateWithFixedCrossAxisCount(
+  crossAxisCount: 2,
+  crossAxisSpacing: 12,
+  mainAxisSpacing: 12,
+  childAspectRatio: 0.72,
+);
+
 class FoodCard extends StatelessWidget {
   const FoodCard({
     super.key,
@@ -357,28 +364,49 @@ class FoodCard extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              FoodNetworkImage(url: food.imageUrl, height: 90, radius: 8),
+              Expanded(
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    return FoodNetworkImage(
+                      url: food.imageUrl,
+                      height: constraints.maxHeight,
+                      radius: 8,
+                    );
+                  },
+                ),
+              ),
               const SizedBox(height: 8),
               Text(
                 food.name,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                style: const TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 14,
+                  height: 1.2,
+                ),
               ),
               Text(
                 food.restaurantName,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(color: Colors.grey, fontSize: 12),
+                style: const TextStyle(
+                  color: Colors.grey,
+                  fontSize: 12,
+                  height: 1.2,
+                ),
               ),
-              const Spacer(),
+              const SizedBox(height: 6),
               Row(
                 children: [
-                  Text(
-                    '\$${food.price.toStringAsFixed(0)}',
-                    style: const TextStyle(fontWeight: FontWeight.bold),
+                  Expanded(
+                    child: Text(
+                      '\$${food.price.toStringAsFixed(0)}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontWeight: FontWeight.bold),
+                    ),
                   ),
-                  const Spacer(),
                   GestureDetector(
                     onTap: onAdd,
                     child: Container(

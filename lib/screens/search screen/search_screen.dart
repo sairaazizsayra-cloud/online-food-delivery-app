@@ -136,12 +136,7 @@ class _SearchScreenState extends State<SearchScreen> {
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
               itemCount: foods.length,
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 2,
-                mainAxisSpacing: 12,
-                crossAxisSpacing: 12,
-                childAspectRatio: 0.78,
-              ),
+              gridDelegate: foodCardGridDelegate,
               itemBuilder: (context, index) {
                 final food = foods[index];
                 return FoodCard(

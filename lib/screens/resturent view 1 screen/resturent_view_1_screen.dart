@@ -108,12 +108,7 @@ class _ResturentView1ScreenState extends State<ResturentView1Screen> {
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
               itemCount: visible.length,
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 2,
-                crossAxisSpacing: 12,
-                mainAxisSpacing: 12,
-                childAspectRatio: 0.78,
-              ),
+              gridDelegate: foodCardGridDelegate,
               itemBuilder: (context, index) {
                 final food = visible[index];
                 return FoodCard(
