@@ -6,6 +6,7 @@ import 'package:food_application/screens/my%20card%20screen/my_card_screen.dart'
 import 'package:food_application/state/app_state.dart';
 import 'package:food_application/widgets/common_widgets.dart';
 import 'package:provider/provider.dart';
+import 'package:readmore/readmore.dart';
 
 class FoodDetailSecreen1 extends StatefulWidget {
   const FoodDetailSecreen1({super.key, this.foodId = 'f7'});
@@ -68,12 +69,33 @@ class _FoodDetailSecreen1State extends State<FoodDetailSecreen1> {
                   const SizedBox(height: 6),
                   Text(food.restaurantName, style: const TextStyle(color: Colors.grey)),
                   const SizedBox(height: 10),
-                  Text(food.description, style: const TextStyle(color: Color(0xFFA0A5BA))),
+                  ReadMoreText(
+                    food.description,
+                    trimLines: 2,
+                    trimMode: TrimMode.Line,
+                    colorClickableText: AppColors.primary,
+                    style: const TextStyle(color: Color(0xFFA0A5BA)),
+                  ),
                   const SizedBox(height: 16),
                   RestaurantMetaRow(
                     rating: food.rating,
                     freeDelivery: food.freeDelivery,
                     minutes: food.deliveryTime,
+                  ),
+                  const SizedBox(height: 22),
+                  const Text('INGREDIENTS', style: TextStyle(fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 12),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: Catalog.ingredientsFor(food)
+                        .map(
+                          (item) => Chip(
+                            label: Text(item),
+                            backgroundColor: AppColors.field,
+                          ),
+                        )
+                        .toList(),
                   ),
                   const SizedBox(height: 22),
                   const Text('SIZE', style: TextStyle(fontWeight: FontWeight.bold)),
@@ -128,6 +150,36 @@ class _FoodDetailSecreen1State extends State<FoodDetailSecreen1> {
                         onTap: () => setState(() => quantity++),
                       ),
                     ],
+                  ),
+                  const SizedBox(height: 22),
+                  const Text('REVIEWS', style: TextStyle(fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 8),
+                  ...Catalog.reviewsFor(food).map(
+                    (review) => ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: const CircleAvatar(
+                        backgroundColor: Color(0xFFFFC4AD),
+                        child: Icon(Icons.person, color: Colors.white),
+                      ),
+                      title: Text(review.author),
+                      subtitle: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              const Icon(Icons.star, size: 14, color: AppColors.primary),
+                              Text(' ${review.rating.toStringAsFixed(1)}'),
+                            ],
+                          ),
+                          ReadMoreText(
+                            review.comment,
+                            trimLines: 2,
+                            trimMode: TrimMode.Line,
+                            colorClickableText: AppColors.primary,
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
                 ],
               ),

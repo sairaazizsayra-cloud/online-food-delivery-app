@@ -6,6 +6,7 @@ import 'package:food_application/screens/edit%20profile%20screen/edit_profile_sc
 import 'package:food_application/screens/food%20detail%201%20screen/food_detail_secreen1.dart';
 import 'package:food_application/screens/login%20screen/login_screen.dart';
 import 'package:food_application/screens/my%20orders%201/my_orders_1.dart';
+import 'package:food_application/screens/notifications%20screen/notifications_screen.dart';
 import 'package:food_application/screens/payment%20sceen%201/payment_screen1.dart';
 import 'package:food_application/state/app_state.dart';
 import 'package:food_application/widgets/common_widgets.dart';
@@ -24,18 +25,12 @@ class MenuScreen extends StatelessWidget {
         child: ListView(
           padding: const EdgeInsets.all(20),
           children: [
-            Row(
-              children: [
-                CircleIconButton(
-                  icon: Icons.arrow_back_ios_new,
-                  size: 40,
-                  onTap: () {
-                    if (Navigator.canPop(context)) Navigator.pop(context);
-                  },
-                ),
-                const SizedBox(width: 10),
-                const Text(
-                  'Profile',
+              Row(
+                children: [
+                  const OptionalBackButton(),
+                  const SizedBox(width: 10),
+                  const Text(
+                    'Profile',
                   style: TextStyle(fontSize: 17, fontWeight: FontWeight.w600),
                 ),
               ],
@@ -85,6 +80,9 @@ class MenuScreen extends StatelessWidget {
             }),
             _tile(Icons.credit_card, 'Payment Methods', () {
               AppNav.to(context, const PaymentScreen1());
+            }),
+            _tile(Icons.notifications_none, 'Notifications', () {
+              AppNav.to(context, const NotificationsScreen());
             }),
             const Divider(),
             const Text(

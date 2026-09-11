@@ -29,6 +29,7 @@ class AppState extends ChangeNotifier {
   FilterOptions filter = FilterOptions();
   String? pendingResetEmail;
   String? errorMessage;
+  final List<AppNotification> notifications = [];
 
   Future<void> hydrate() async {
     final prefs = await SharedPreferences.getInstance();
@@ -84,6 +85,16 @@ class AppState extends ChangeNotifier {
               );
             }).whereType<CartLine>(),
           );
+        if (json['notifications'] != null) {
+          notifications
+            ..clear()
+            ..addAll(
+              ((json['notifications'] as List?) ?? []).map(
+                (item) =>
+                    AppNotification.fromJson(item as Map<String, dynamic>),
+              ),
+            );
+        }
         orders
           ..clear()
           ..addAll(
@@ -122,6 +133,9 @@ class AppState extends ChangeNotifier {
     if (users.isEmpty) {
       _seedDefaults();
     }
+    if (notifications.isEmpty) {
+      _seedNotifications();
+    }
     hydrated = true;
     notifyListeners();
   }
@@ -147,6 +161,25 @@ class AppState extends ChangeNotifier {
       ),
     );
     selectedAddressId = 'a1';
+    _seedNotifications();
+  }
+
+  void _seedNotifications() {
+    if (notifications.isNotEmpty) return;
+    notifications.addAll([
+      AppNotification(
+        id: 'n1',
+        title: 'Welcome to Foodie',
+        body: 'Order from nearby restaurants and track your delivery live.',
+        createdAt: DateTime.now(),
+      ),
+      AppNotification(
+        id: 'n2',
+        title: '20% off your first order',
+        body: 'Use promo code FOOD20 at checkout.',
+        createdAt: DateTime.now(),
+      ),
+    ]);
   }
 
   Future<void> _persist() async {
@@ -164,6 +197,7 @@ class AppState extends ChangeNotifier {
         'favoriteFoodIds': favoriteFoodIds.toList(),
         'cart': cart.map((item) => item.toJson()).toList(),
         'orders': orders.map((item) => item.toJson()).toList(),
+        'notifications': notifications.map((item) => item.toJson()).toList(),
       }),
     );
   }
@@ -482,8 +516,10 @@ class AppState extends ChangeNotifier {
     orders.insert(0, order);
     cart.clear();
     promoCode = null;
-    _persist();
-    notifyListeners();
+    addNotification(
+      'Order placed',
+      'Order #${order.id} from ${order.restaurantName} is being prepared.',
+    );
     return order;
   }
 
@@ -494,8 +530,7 @@ class AppState extends ChangeNotifier {
         );
     if (order == null) return;
     order.status = OrderStatus.cancelled;
-    _persist();
-    notifyListeners();
+    addNotification('Order cancelled', 'Order #$id was cancelled.');
   }
 
   void markDelivered(String id) {
@@ -505,6 +540,30 @@ class AppState extends ChangeNotifier {
         );
     if (order == null) return;
     order.status = OrderStatus.delivered;
+    addNotification('Order delivered', 'Order #$id has been delivered. Enjoy!');
+  }
+
+  int get unreadCount =>
+      notifications.where((item) => !item.read).length;
+
+  void addNotification(String title, String body) {
+    notifications.insert(
+      0,
+      AppNotification(
+        id: DateTime.now().millisecondsSinceEpoch.toString(),
+        title: title,
+        body: body,
+        createdAt: DateTime.now(),
+      ),
+    );
+    _persist();
+    notifyListeners();
+  }
+
+  void markNotificationsRead() {
+    for (final item in notifications) {
+      item.read = true;
+    }
     _persist();
     notifyListeners();
   }

@@ -1,3 +1,4 @@
+import 'package:animated_text_kit/animated_text_kit.dart';
 import 'package:flutter/material.dart';
 import 'package:food_application/core/app_assets.dart';
 import 'package:food_application/core/app_colors.dart';
@@ -49,15 +50,34 @@ class _SpalshScreenState extends State<SpalshScreen> {
     return Scaffold(
       backgroundColor: AppColors.cartBg,
       body: Center(
-        child: Image.asset(
-          AppAssets.logo,
-          width: 240,
-          fit: BoxFit.contain,
-          errorBuilder: (_, _, _) => const Icon(
-            Icons.fastfood,
-            size: 96,
-            color: AppColors.primary,
-          ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Image.asset(
+              AppAssets.logo,
+              width: 220,
+              fit: BoxFit.contain,
+              errorBuilder: (_, _, _) => const Icon(
+                Icons.fastfood,
+                size: 96,
+                color: AppColors.primary,
+              ),
+            ),
+            const SizedBox(height: 16),
+            DefaultTextStyle(
+              style: const TextStyle(
+                fontSize: 28,
+                fontWeight: FontWeight.bold,
+                color: AppColors.primary,
+              ),
+              child: AnimatedTextKit(
+                isRepeatingAnimation: false,
+                animatedTexts: [
+                  FadeAnimatedText('Foodie', duration: const Duration(milliseconds: 1200)),
+                ],
+              ),
+            ),
+          ],
         ),
       ),
     );

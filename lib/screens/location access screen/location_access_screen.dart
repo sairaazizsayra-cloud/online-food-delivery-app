@@ -41,7 +41,10 @@ class _LocationAccessScreenState extends State<LocationAccessScreen> {
               const Spacer(),
               PrimaryButton(
                 label: 'ACCESS LOCATION',
-                onPressed: () => AppNav.offAll(context, const MainShell()),
+                onPressed: () {
+                  showAppSnack(context, 'Delivering to Halal Lab Office');
+                  AppNav.offAll(context, const MainShell());
+                },
               ),
               TextButton(
                 onPressed: () => AppNav.offAll(context, const MainShell()),

@@ -35,15 +35,16 @@ class _MyCardScreenState extends State<MyCardScreen> {
               padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
               child: Row(
                 children: [
-                  CircleIconButton(
-                    icon: Icons.arrow_back_ios_new,
-                    background: AppColors.cartItem,
-                    iconColor: Colors.white,
-                    size: 40,
-                    onTap: () {
-                      if (Navigator.canPop(context)) Navigator.pop(context);
-                    },
-                  ),
+                  if (Navigator.canPop(context))
+                    CircleIconButton(
+                      icon: Icons.arrow_back_ios_new,
+                      background: AppColors.cartItem,
+                      iconColor: Colors.white,
+                      size: 40,
+                      onTap: () => Navigator.pop(context),
+                    )
+                  else
+                    const SizedBox(width: 40, height: 40),
                   const SizedBox(width: 10),
                   const Text('Cart', style: TextStyle(color: Colors.white, fontSize: 18)),
                   const Spacer(),

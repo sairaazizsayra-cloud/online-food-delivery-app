@@ -4,12 +4,15 @@ import 'package:food_application/core/app_colors.dart';
 import 'package:food_application/core/app_nav.dart';
 import 'package:food_application/data/catalog.dart';
 import 'package:food_application/models/models.dart';
+import 'package:food_application/screens/add%20new%20address%20screen/add_new_address_screen.dart';
 import 'package:food_application/screens/burger%20screen/burger_screen.dart';
 import 'package:food_application/screens/edit%20profile%20screen/edit_profile_screen.dart';
+import 'package:food_application/screens/filter%20screen/filter_screen.dart';
 import 'package:food_application/screens/login%20screen/login_screen.dart';
 import 'package:food_application/screens/menu%20screen/menu_screen.dart';
 import 'package:food_application/screens/my%20card%20screen/my_card_screen.dart';
 import 'package:food_application/screens/my%20orders%201/my_orders_1.dart';
+import 'package:food_application/screens/notifications%20screen/notifications_screen.dart';
 import 'package:food_application/screens/resturent%20view%201%20screen/resturent_view_1_screen.dart';
 import 'package:food_application/screens/search%20screen/search_screen.dart';
 import 'package:food_application/state/app_state.dart';
@@ -58,7 +61,7 @@ class _HomeScreenv1State extends State<HomeScreenv1> {
                         ),
                       ),
                       GestureDetector(
-                        onTap: () => AppNav.to(context, const MenuScreen()),
+                        onTap: () => AppNav.to(context, const AddLocationScreen()),
                         child: Row(
                           children: [
                             Flexible(
@@ -75,6 +78,39 @@ class _HomeScreenv1State extends State<HomeScreenv1> {
                     ],
                   ),
                 ),
+                Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    CircleIconButton(
+                      icon: Icons.notifications_none,
+                      onTap: () =>
+                          AppNav.to(context, const NotificationsScreen()),
+                    ),
+                    if (state.unreadCount > 0)
+                      Positioned(
+                        right: 2,
+                        top: 2,
+                        child: Container(
+                          height: 16,
+                          width: 16,
+                          decoration: const BoxDecoration(
+                            color: AppColors.primary,
+                            shape: BoxShape.circle,
+                          ),
+                          child: Center(
+                            child: Text(
+                              '${state.unreadCount}',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 9,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+                const SizedBox(width: 8),
                 CartBadgeButton(
                   onTap: () => AppNav.to(context, const MyCardScreen()),
                 ),
@@ -94,24 +130,36 @@ class _HomeScreenv1State extends State<HomeScreenv1> {
               ),
             ),
             const SizedBox(height: 18),
-            GestureDetector(
-              onTap: () => AppNav.to(context, const SearchScreen()),
-              child: AbsorbPointer(
-                child: Container(
-                  height: 50,
-                  decoration: BoxDecoration(
-                    color: Colors.grey.shade100,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: const TextField(
-                    decoration: InputDecoration(
-                      hintText: 'Search dishes, restaurants',
-                      prefixIcon: Icon(Icons.search, color: Color(0xFFA0A5BA)),
-                      border: InputBorder.none,
+            Row(
+              children: [
+                Expanded(
+                  child: GestureDetector(
+                    onTap: () => AppNav.to(context, const SearchScreen()),
+                    child: AbsorbPointer(
+                      child: Container(
+                        height: 50,
+                        decoration: BoxDecoration(
+                          color: Colors.grey.shade100,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: const TextField(
+                          decoration: InputDecoration(
+                            hintText: 'Search dishes, restaurants',
+                            prefixIcon: Icon(Icons.search, color: Color(0xFFA0A5BA)),
+                            border: InputBorder.none,
+                          ),
+                        ),
+                      ),
                     ),
                   ),
                 ),
-              ),
+                const SizedBox(width: 10),
+                CircleIconButton(
+                  icon: Icons.tune,
+                  iconColor: AppColors.primary,
+                  onTap: () => AppNav.to(context, const FilterScreen()),
+                ),
+              ],
             ),
             const SizedBox(height: 22),
             ClipRRect(
@@ -327,6 +375,7 @@ class _HomeDrawer extends StatelessWidget {
             _item(context, Icons.person_outline, 'Personal Info', const EditProfileScreen()),
             _item(context, Icons.receipt_long_outlined, 'My Orders', const MyOrders1()),
             _item(context, Icons.favorite_border, 'Favorites', const MenuScreen()),
+            _item(context, Icons.notifications_none, 'Notifications', const NotificationsScreen()),
             _item(context, Icons.shopping_bag_outlined, 'Cart', const MyCardScreen()),
             const Divider(),
             ListTile(

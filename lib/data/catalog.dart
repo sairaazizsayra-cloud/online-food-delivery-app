@@ -297,4 +297,40 @@ class Catalog {
     if (category == 'All') return List<FoodItem>.from(foods);
     return foods.where((food) => food.category == category).toList();
   }
+
+  static List<String> ingredientsFor(FoodItem food) {
+    switch (food.category) {
+      case 'Burger':
+        return ['Beef', 'Cheddar', 'Lettuce', 'Brioche'];
+      case 'Pizza':
+        return ['Tomato', 'Mozzarella', 'Basil', 'Olive oil'];
+      case 'Pasta':
+        return ['Fettuccine', 'Parmesan', 'Cream', 'Garlic'];
+      case 'Chicken':
+        return ['Chicken', 'Herbs', 'Rice', 'Garlic dip'];
+      case 'Hot Dog':
+        return ['Sausage', 'Bun', 'Mustard', 'Onions'];
+      case 'Drinks':
+        return ['Coffee', 'Ice', 'Milk', 'Sugar'];
+      default:
+        return ['Fresh ingredients', 'House sauce'];
+    }
+  }
+
+  static List<FoodReview> reviewsFor(FoodItem food) {
+    return [
+      FoodReview(
+        author: 'Ayesha K.',
+        rating: food.rating,
+        comment:
+            'Really good portion size and it arrived hot. I would order ${food.name} again, especially with the ${food.restaurantName} combo.',
+      ),
+      const FoodReview(
+        author: 'Bilal R.',
+        rating: 4.4,
+        comment:
+            'Packaging was neat and delivery was on time. Flavor is rich without being too oily.',
+      ),
+    ];
+  }
 }

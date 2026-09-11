@@ -432,3 +432,19 @@ class FoodCard extends StatelessWidget {
 void showAppSnack(BuildContext context, String message) {
   ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
 }
+
+class OptionalBackButton extends StatelessWidget {
+  const OptionalBackButton({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    if (!Navigator.canPop(context)) {
+      return const SizedBox(width: 40, height: 40);
+    }
+    return CircleIconButton(
+      icon: Icons.arrow_back_ios_new,
+      size: 40,
+      onTap: () => Navigator.pop(context),
+    );
+  }
+}

@@ -32,13 +32,7 @@ class _MyOrders1State extends State<MyOrders1> {
             children: [
               Row(
                 children: [
-                  CircleIconButton(
-                    icon: Icons.arrow_back_ios_new,
-                    size: 40,
-                    onTap: () {
-                      if (Navigator.canPop(context)) Navigator.pop(context);
-                    },
-                  ),
+                  const OptionalBackButton(),
                   const SizedBox(width: 10),
                   const Text(
                     'My Orders',
