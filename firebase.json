@@ -1,0 +1,46 @@
+{
+  "flutter": {
+    "platforms": {
+      "android": {
+        "default": {
+          "projectId": "food-application-9e7f2",
+          "appId": "1:407362360050:android:bee614750fc3aa26cff66b",
+          "fileOutput": "android/app/google-services.json"
+        }
+      },
+      "ios": {
+        "default": {
+          "projectId": "food-application-9e7f2",
+          "appId": "1:407362360050:ios:8eeab9cfe9202491cff66b",
+          "uploadEnabled": false,
+          "fileOutput": "ios/Runner/GoogleService-Info.plist"
+        }
+      },
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "food-application-9e7f2",
+          "configurations": {
+            "android": "1:407362360050:android:bee614750fc3aa26cff66b",
+            "ios": "1:407362360050:ios:8eeab9cfe9202491cff66b",
+            "web": "1:407362360050:web:b5e3612dad5ccb8dcff66b"
+          }
+        }
+      }
+    }
+  },
+  "firestore": {
+    "database": "(default)",
+    "location": "nam5",
+    "rules": "firestore.rules",
+    "indexes": "firestore.indexes.json"
+  },
+  "auth": {
+    "providers": {
+      "emailPassword": true,
+      "googleSignIn": {
+        "oAuthBrandDisplayName": "Foodie",
+        "supportEmail": "sairaaziz.sayra@gmail.com"
+      }
+    }
+  }
+}
