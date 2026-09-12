@@ -155,12 +155,14 @@ class PrimaryButton extends StatelessWidget {
   const PrimaryButton({
     super.key,
     required this.label,
-    required this.onPressed,
+    this.onPressed,
+    this.onTap,
     this.height = 56,
   });
 
   final String label;
   final VoidCallback? onPressed;
+  final VoidCallback? onTap;
   final double height;
 
   @override
@@ -169,7 +171,7 @@ class PrimaryButton extends StatelessWidget {
       width: double.infinity,
       height: height,
       child: ElevatedButton(
-        onPressed: onPressed,
+        onPressed: onPressed ?? onTap,
         style: ElevatedButton.styleFrom(
           backgroundColor: AppColors.primary,
           foregroundColor: Colors.white,
@@ -193,6 +195,10 @@ class AppField extends StatelessWidget {
     this.obscure = false,
     this.keyboardType,
     this.maxLines = 1,
+    this.maxLength,
+    this.textInputAction,
+    this.onSubmitted,
+    this.autofillHints,
   });
 
   final TextEditingController controller;
@@ -200,6 +206,10 @@ class AppField extends StatelessWidget {
   final bool obscure;
   final TextInputType? keyboardType;
   final int maxLines;
+  final int? maxLength;
+  final TextInputAction? textInputAction;
+  final ValueChanged<String>? onSubmitted;
+  final Iterable<String>? autofillHints;
 
   @override
   Widget build(BuildContext context) {
@@ -208,11 +218,16 @@ class AppField extends StatelessWidget {
       obscureText: obscure,
       keyboardType: keyboardType,
       maxLines: maxLines,
+      maxLength: maxLength,
+      textInputAction: textInputAction,
+      onSubmitted: onSubmitted,
+      autofillHints: autofillHints,
       decoration: InputDecoration(
         hintText: hint,
         hintStyle: const TextStyle(color: Color(0xFFD0D9E1)),
         filled: true,
         fillColor: AppColors.field,
+        counterText: '',
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(10),
           borderSide: BorderSide.none,
@@ -255,9 +270,13 @@ class AuthScaffold extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 8),
-                Text(
-                  subtitle,
-                  style: const TextStyle(fontSize: 14, color: Colors.grey),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 24),
+                  child: Text(
+                    subtitle,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(fontSize: 14, color: Colors.grey),
+                  ),
                 ),
               ],
             ),
@@ -278,6 +297,18 @@ class AuthScaffold extends StatelessWidget {
               child: child,
             ),
           ),
+          if (Navigator.canPop(context))
+            Positioned(
+              top: MediaQuery.paddingOf(context).top + 18,
+              left: 20,
+              child: CircleIconButton(
+                icon: Icons.arrow_back_ios_new,
+                size: 45,
+                background: Colors.white,
+                iconColor: AppColors.dark,
+                onTap: () => Navigator.pop(context),
+              ),
+            ),
         ],
       ),
     );

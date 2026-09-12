@@ -1,8 +1,335 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    match /{document=**} {
-      allow read, write: if false;
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: restaurants
+    // Document ID: restaurant id (r1, r2, ...)
+    // Fields:
+    //   - name: string (required, 1-80)
+    //   - imageUrl: string (required, 1-400)
+    //   - categories: list<string> (required, <= 12)
+    //   - rating: number (required, 0-5)
+    //   - deliveryTime: number (required, 1-180)
+    //   - freeDelivery: bool (required)
+    //   - description: string (required, 1-500)
+    //
+    // Collection: foods
+    // Document ID: food id (f1, f2, ...)
+    // Fields:
+    //   - name: string (required, 1-80)
+    //   - restaurantId: string (required, 1-40)
+    //   - restaurantName: string (required, 1-80)
+    //   - category: string (required, 1-40)
+    //   - price: number (required, 0-1000)
+    //   - rating: number (required, 0-5)
+    //   - imageUrl: string (required, 1-400)
+    //   - description: string (required, 1-500)
+    //   - deliveryTime: number (required, 1-180)
+    //   - freeDelivery: bool (required)
+    //
+    // Collection: users
+    // Document ID: Firebase Auth uid
+    // Fields:
+    //   - uid: string (required, immutable, equals auth.uid)
+    //   - name: string (required, 1-80)
+    //   - email: string (optional, email format, PII)
+    //   - phone: string (optional, <= 20, PII)
+    //   - bio: string (optional, <= 280)
+    //   - selectedAddressId: string | null
+    //   - selectedCardId: string | null
+    //   - paymentMethod: string (Cash|Card)
+    //   - favoriteFoodIds: list<string> (<= 100)
+    //
+    // Subcollection: users/{uid}/addresses/{id}
+    //   - label, fullAddress, street, postCode, apartment: strings
+    //
+    // Subcollection: users/{uid}/cards/{id}
+    //   - holderName: string
+    //   - last4: string (4 digits)
+    //   - expiry: string
+    //
+    // Subcollection: users/{uid}/cart/{id}
+    //   - foodId: string
+    //   - size: string
+    //   - quantity: number (1-20)
+    //
+    // Subcollection: users/{uid}/orders/{id}
+    //   - uid: string (immutable)
+    //   - total: number
+    //   - address: string
+    //   - paymentLabel: string
+    //   - createdAt: timestamp (immutable)
+    //   - status: ongoing|delivered|cancelled
+    //   - restaurantName: string
+    //   - items: list<map>
+    //
+    // Subcollection: users/{uid}/notifications/{id}
+    //   - title: string
+    //   - body: string
+    //   - createdAt: timestamp
+    //   - read: bool
+    //
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function hasOnlyAllowedFields(fields) {
+      return request.resource.data.keys().hasOnly(fields);
+    }
+
+    function validStringLength(field, minLen, maxLen) {
+      return request.resource.data[field] is string &&
+        request.resource.data[field].size() >= minLen &&
+        request.resource.data[field].size() <= maxLen;
+    }
+
+    function isValidEmail(email) {
+      return email is string &&
+        email.matches('^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$');
+    }
+
+    function isValidOptionalString(field, maxLen) {
+      return !(field in request.resource.data) ||
+        (request.resource.data[field] is string &&
+          request.resource.data[field].size() <= maxLen);
+    }
+
+    function isValidStringList(list, maxItems, maxItemLen) {
+      return list is list &&
+        list.size() <= maxItems &&
+        list.size() >= 0;
+    }
+
+    function isValidRestaurant(data) {
+      return hasOnlyAllowedFields([
+          'name', 'imageUrl', 'categories', 'rating',
+          'deliveryTime', 'freeDelivery', 'description'
+        ]) &&
+        validStringLength('name', 1, 80) &&
+        validStringLength('imageUrl', 1, 400) &&
+        validStringLength('description', 1, 500) &&
+        data.categories is list &&
+        data.categories.size() > 0 &&
+        data.categories.size() <= 12 &&
+        data.rating is number &&
+        data.rating >= 0 &&
+        data.rating <= 5 &&
+        data.deliveryTime is number &&
+        data.deliveryTime >= 1 &&
+        data.deliveryTime <= 180 &&
+        data.freeDelivery is bool;
+    }
+
+    function isValidFood(data) {
+      return hasOnlyAllowedFields([
+          'name', 'restaurantId', 'restaurantName', 'category',
+          'price', 'rating', 'imageUrl', 'description',
+          'deliveryTime', 'freeDelivery'
+        ]) &&
+        validStringLength('name', 1, 80) &&
+        validStringLength('restaurantId', 1, 40) &&
+        validStringLength('restaurantName', 1, 80) &&
+        validStringLength('category', 1, 40) &&
+        validStringLength('imageUrl', 1, 400) &&
+        validStringLength('description', 1, 500) &&
+        data.price is number &&
+        data.price >= 0 &&
+        data.price <= 1000 &&
+        data.rating is number &&
+        data.rating >= 0 &&
+        data.rating <= 5 &&
+        data.deliveryTime is number &&
+        data.deliveryTime >= 1 &&
+        data.deliveryTime <= 180 &&
+        data.freeDelivery is bool;
+    }
+
+    function isValidUser(data) {
+      return hasOnlyAllowedFields([
+          'uid', 'name', 'email', 'phone', 'bio',
+          'selectedAddressId', 'selectedCardId',
+          'paymentMethod', 'favoriteFoodIds'
+        ]) &&
+        data.uid is string &&
+        data.uid == request.auth.uid &&
+        validStringLength('name', 1, 80) &&
+        (
+          !('email' in data) ||
+          data.email == '' ||
+          isValidEmail(data.email)
+        ) &&
+        isValidOptionalString('phone', 20) &&
+        isValidOptionalString('bio', 280) &&
+        isValidOptionalString('selectedAddressId', 40) &&
+        isValidOptionalString('selectedCardId', 40) &&
+        (
+          !('paymentMethod' in data) ||
+          data.paymentMethod in ['Cash', 'Card']
+        ) &&
+        (
+          !('favoriteFoodIds' in data) ||
+          isValidStringList(data.favoriteFoodIds, 100, 40)
+        );
+    }
+
+    function isValidAddress(data) {
+      return hasOnlyAllowedFields([
+          'label', 'fullAddress', 'street', 'postCode', 'apartment'
+        ]) &&
+        validStringLength('label', 1, 40) &&
+        validStringLength('fullAddress', 1, 200) &&
+        isValidOptionalString('street', 120) &&
+        isValidOptionalString('postCode', 20) &&
+        isValidOptionalString('apartment', 40);
+    }
+
+    function isValidCard(data) {
+      return hasOnlyAllowedFields(['holderName', 'last4', 'expiry']) &&
+        validStringLength('holderName', 1, 80) &&
+        data.last4 is string &&
+        data.last4.matches('^[0-9]{4}$') &&
+        validStringLength('expiry', 1, 10);
+    }
+
+    function isValidCartLine(data) {
+      return hasOnlyAllowedFields(['foodId', 'size', 'quantity']) &&
+        validStringLength('foodId', 1, 40) &&
+        validStringLength('size', 1, 8) &&
+        data.quantity is number &&
+        data.quantity >= 1 &&
+        data.quantity <= 20;
+    }
+
+    function isValidOrderItem(item) {
+      return item.keys().hasOnly([
+          'foodId', 'name', 'size', 'quantity', 'price', 'restaurantName'
+        ]) &&
+        item.foodId is string &&
+        item.foodId.size() <= 40 &&
+        item.name is string &&
+        item.name.size() <= 80 &&
+        item.size is string &&
+        item.size.size() <= 8 &&
+        item.quantity is number &&
+        item.quantity >= 1 &&
+        item.quantity <= 20 &&
+        item.price is number &&
+        item.price >= 0 &&
+        item.price <= 1000 &&
+        item.restaurantName is string &&
+        item.restaurantName.size() <= 80;
+    }
+
+    function isValidOrder(data) {
+      return hasOnlyAllowedFields([
+          'uid', 'total', 'address', 'paymentLabel',
+          'createdAt', 'status', 'restaurantName', 'items'
+        ]) &&
+        data.uid == request.auth.uid &&
+        data.total is number &&
+        data.total >= 0 &&
+        data.total <= 99999 &&
+        validStringLength('address', 1, 240) &&
+        validStringLength('paymentLabel', 1, 80) &&
+        data.createdAt is timestamp &&
+        data.status in ['ongoing', 'delivered', 'cancelled'] &&
+        validStringLength('restaurantName', 1, 80) &&
+        data.items is list &&
+        data.items.size() > 0 &&
+        data.items.size() <= 50;
+    }
+
+    function isValidOrderUpdate() {
+      return isValidOrder(request.resource.data) &&
+        request.resource.data.uid == resource.data.uid &&
+        request.resource.data.createdAt == resource.data.createdAt &&
+        request.resource.data.total == resource.data.total &&
+        request.resource.data.address == resource.data.address &&
+        request.resource.data.paymentLabel == resource.data.paymentLabel &&
+        request.resource.data.restaurantName == resource.data.restaurantName &&
+        request.resource.data.items == resource.data.items &&
+        (
+          (resource.data.status == 'ongoing' &&
+            request.resource.data.status in ['cancelled', 'delivered']) ||
+          request.resource.data.status == resource.data.status
+        );
+    }
+
+    function isValidNotification(data) {
+      return hasOnlyAllowedFields(['title', 'body', 'createdAt', 'read']) &&
+        validStringLength('title', 1, 80) &&
+        validStringLength('body', 1, 300) &&
+        data.createdAt is timestamp &&
+        data.read is bool;
+    }
+
+    match /restaurants/{restaurantId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && isValidRestaurant(request.resource.data);
+      allow update, delete: if false;
+    }
+
+    match /foods/{foodId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && isValidFood(request.resource.data);
+      allow update, delete: if false;
+    }
+
+    match /users/{userId} {
+      allow read: if isOwner(userId);
+      allow create: if isOwner(userId) && isValidUser(request.resource.data);
+      allow update: if isOwner(userId) &&
+        isValidUser(request.resource.data) &&
+        request.resource.data.uid == resource.data.uid;
+      allow delete: if false;
+
+      match /addresses/{addressId} {
+        allow read: if isOwner(userId);
+        allow create, update: if isOwner(userId) &&
+          isValidAddress(request.resource.data);
+        allow delete: if isOwner(userId);
+      }
+
+      match /cards/{cardId} {
+        allow read: if isOwner(userId);
+        allow create, update: if isOwner(userId) &&
+          isValidCard(request.resource.data);
+        allow delete: if isOwner(userId);
+      }
+
+      match /cart/{lineId} {
+        allow read: if isOwner(userId);
+        allow create, update: if isOwner(userId) &&
+          isValidCartLine(request.resource.data);
+        allow delete: if isOwner(userId);
+      }
+
+      match /orders/{orderId} {
+        allow read: if isOwner(userId);
+        allow create: if isOwner(userId) &&
+          isValidOrder(request.resource.data) &&
+          request.resource.data.status == 'ongoing';
+        allow update: if isOwner(userId) && isValidOrderUpdate();
+        allow delete: if false;
+      }
+
+      match /notifications/{notificationId} {
+        allow read: if isOwner(userId);
+        allow create, update: if isOwner(userId) &&
+          isValidNotification(request.resource.data);
+        allow delete: if isOwner(userId);
+      }
     }
   }
 }

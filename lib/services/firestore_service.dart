@@ -63,8 +63,8 @@ class FirestoreService {
     return userRef(uid).set(
       {
         ...user.toFirestore(),
-        'selectedAddressId': selectedAddressId,
-        'selectedCardId': selectedCardId,
+        'selectedAddressId': selectedAddressId ?? '',
+        'selectedCardId': selectedCardId ?? '',
         'paymentMethod': paymentMethod,
         'favoriteFoodIds': favoriteFoodIds,
       },

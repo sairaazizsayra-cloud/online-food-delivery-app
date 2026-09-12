@@ -111,8 +111,11 @@ class MenuScreen extends StatelessWidget {
               contentPadding: EdgeInsets.zero,
               leading: const Icon(Icons.logout, color: Colors.red),
               title: const Text('Log Out', style: TextStyle(color: Colors.red)),
-              onTap: () {
-                state.logout();
+              onTap: () async {
+                await state.logout();
+                if (!context.mounted) {
+                  return;
+                }
                 AppNav.offAll(context, const LoginScreen());
               },
             ),

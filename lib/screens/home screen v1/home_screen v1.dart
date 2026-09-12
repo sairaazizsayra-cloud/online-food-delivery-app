@@ -381,8 +381,11 @@ class _HomeDrawer extends StatelessWidget {
             ListTile(
               leading: const Icon(Icons.logout, color: Colors.red),
               title: const Text('Log Out', style: TextStyle(color: Colors.red)),
-              onTap: () {
-                context.read<AppState>().logout();
+              onTap: () async {
+                await context.read<AppState>().logout();
+                if (!context.mounted) {
+                  return;
+                }
                 AppNav.offAll(context, const LoginScreen());
               },
             ),

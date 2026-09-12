@@ -1,20 +1,30 @@
-import 'dart:convert';
-
-import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
+import 'package:food_application/core/firebase_constants.dart';
 import 'package:food_application/data/catalog.dart';
 import 'package:food_application/models/models.dart';
+import 'package:food_application/services/auth_service.dart';
+import 'package:food_application/services/firestore_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class AppState extends ChangeNotifier {
-  static const String _storageKey = 'foodie_app_state_v1';
-  static const String demoOtp = '1234';
+  static const String _onboardingKey = 'foodie_seen_onboarding';
   static const double deliveryFee = 0;
   static const double promoPercent = 0.2;
 
+  AppState({
+    AuthService? authService,
+    FirestoreService? firestoreService,
+  })  : _auth = authService ?? AuthService(),
+        _db = firestoreService ?? FirestoreService();
+
+  final AuthService _auth;
+  final FirestoreService _db;
+
   bool hydrated = false;
+  bool busy = false;
   bool seenOnboarding = false;
   UserAccount? currentUser;
-  final List<UserAccount> users = [];
   final List<CartLine> cart = [];
   final List<OrderModel> orders = [];
   final List<AddressModel> addresses = [];
@@ -30,182 +40,153 @@ class AppState extends ChangeNotifier {
   String? pendingResetEmail;
   String? errorMessage;
   final List<AppNotification> notifications = [];
+  List<FoodItem> _foods = List<FoodItem>.from(Catalog.foods);
+  List<Restaurant> _restaurants = List<Restaurant>.from(Catalog.restaurants);
+
+  String? get currentUid => _auth.currentUser?.uid ?? currentUser?.uid;
 
   Future<void> hydrate() async {
     final prefs = await SharedPreferences.getInstance();
-    final raw = prefs.getString(_storageKey);
-    if (raw != null) {
-      try {
-        final json = jsonDecode(raw) as Map<String, dynamic>;
-        seenOnboarding = json['seenOnboarding'] as bool? ?? false;
-        users
-          ..clear()
-          ..addAll(
-            ((json['users'] as List?) ?? []).map(
-              (item) => UserAccount.fromJson(item as Map<String, dynamic>),
-            ),
-          );
-        final email = json['currentEmail'] as String?;
-        if (email != null) {
-          currentUser = users.cast<UserAccount?>().firstWhere(
-                (user) => user?.email == email,
-                orElse: () => null,
-              );
-        }
-        addresses
-          ..clear()
-          ..addAll(
-            ((json['addresses'] as List?) ?? []).map(
-              (item) => AddressModel.fromJson(item as Map<String, dynamic>),
-            ),
-          );
-        cards
-          ..clear()
-          ..addAll(
-            ((json['cards'] as List?) ?? []).map(
-              (item) => PaymentCardModel.fromJson(item as Map<String, dynamic>),
-            ),
-          );
-        selectedAddressId = json['selectedAddressId'] as String?;
-        selectedCardId = json['selectedCardId'] as String?;
-        favoriteFoodIds
-          ..clear()
-          ..addAll(((json['favoriteFoodIds'] as List?) ?? []).cast<String>());
-        cart
-          ..clear()
-          ..addAll(
-            ((json['cart'] as List?) ?? []).map((item) {
-              final map = item as Map<String, dynamic>;
-              final food = Catalog.foodById(map['foodId'] as String);
-              if (food == null) return null;
-              return CartLine(
-                food: food,
-                size: map['size'] as String? ?? '14',
-                quantity: map['quantity'] as int? ?? 1,
-              );
-            }).whereType<CartLine>(),
-          );
-        if (json['notifications'] != null) {
-          notifications
-            ..clear()
-            ..addAll(
-              ((json['notifications'] as List?) ?? []).map(
-                (item) =>
-                    AppNotification.fromJson(item as Map<String, dynamic>),
-              ),
-            );
-        }
-        orders
-          ..clear()
-          ..addAll(
-            ((json['orders'] as List?) ?? []).map((item) {
-              final map = item as Map<String, dynamic>;
-              final lines = ((map['items'] as List?) ?? []).map((line) {
-                final lineMap = line as Map<String, dynamic>;
-                final food = Catalog.foodById(lineMap['foodId'] as String);
-                if (food == null) return null;
-                return CartLine(
-                  food: food,
-                  size: lineMap['size'] as String? ?? '14',
-                  quantity: lineMap['quantity'] as int? ?? 1,
-                );
-              }).whereType<CartLine>().toList();
-              return OrderModel(
-                id: map['id'] as String,
-                items: lines,
-                total: (map['total'] as num?)?.toDouble() ?? 0,
-                address: map['address'] as String? ?? '',
-                paymentLabel: map['paymentLabel'] as String? ?? 'Cash',
-                createdAt: DateTime.tryParse(map['createdAt'] as String? ?? '') ??
-                    DateTime.now(),
-                status: OrderStatus.values.firstWhere(
-                  (value) => value.name == map['status'],
-                  orElse: () => OrderStatus.ongoing,
-                ),
-                restaurantName: map['restaurantName'] as String? ?? 'Restaurant',
-              );
-            }),
-          );
-      } catch (_) {
-        _seedDefaults();
-      }
+    seenOnboarding = prefs.getBool(_onboardingKey) ?? false;
+
+    final firebaseUser = _auth.currentUser;
+    if (firebaseUser != null) {
+      await _loadSignedInUser(firebaseUser);
     }
-    if (users.isEmpty) {
-      _seedDefaults();
-    }
-    if (notifications.isEmpty) {
-      _seedNotifications();
-    }
+
     hydrated = true;
     notifyListeners();
   }
 
-  void _seedDefaults() {
-    users.add(
-      UserAccount(
-        name: 'Halal Lab',
-        email: 'demo@foodie.com',
-        password: '123456',
-        phone: '408-841-0926',
-        bio: 'I love fast food',
-      ),
-    );
-    addresses.add(
-      AddressModel(
-        id: 'a1',
-        label: 'Office',
-        fullAddress: 'Halal Lab Office, 2118 Thornridge Cir. Syracuse',
-        street: 'Thornridge Circle',
-        postCode: '34567',
-        apartment: '12B',
-      ),
-    );
-    selectedAddressId = 'a1';
-    _seedNotifications();
+  Future<void> _loadSignedInUser(User firebaseUser) async {
+    try {
+      await _db.ensureCatalogSeeded();
+      final remoteRestaurants = await _db.loadRestaurants();
+      final remoteFoods = await _db.loadFoods();
+      if (remoteRestaurants.isNotEmpty) {
+        _restaurants = remoteRestaurants;
+      }
+      if (remoteFoods.isNotEmpty) {
+        _foods = remoteFoods;
+      }
+
+      currentUser = await _db.ensureUserProfile(
+        uid: firebaseUser.uid,
+        name: firebaseUser.displayName ?? 'Foodie User',
+        email: firebaseUser.email ?? '',
+        phone: firebaseUser.phoneNumber ?? '',
+      );
+
+      final settings = await _db.loadUserSettings(firebaseUser.uid);
+      selectedAddressId = settings['selectedAddressId'] as String?;
+      selectedCardId = settings['selectedCardId'] as String?;
+      paymentMethod = settings['paymentMethod'] as String? ?? 'Cash';
+      favoriteFoodIds
+        ..clear()
+        ..addAll(((settings['favoriteFoodIds'] as List?) ?? []).cast<String>());
+
+      addresses
+        ..clear()
+        ..addAll(await _db.loadAddresses(firebaseUser.uid));
+      cards
+        ..clear()
+        ..addAll(await _db.loadCards(firebaseUser.uid));
+      cart
+        ..clear()
+        ..addAll(await _db.loadCart(firebaseUser.uid));
+      orders
+        ..clear()
+        ..addAll(await _db.loadOrders(firebaseUser.uid));
+      notifications
+        ..clear()
+        ..addAll(await _db.loadNotifications(firebaseUser.uid));
+
+      if (notifications.isEmpty) {
+        await _seedWelcomeNotifications(firebaseUser.uid);
+      }
+    } catch (error) {
+      debugPrint('Error loading signed-in user: $error');
+    }
   }
 
-  void _seedNotifications() {
-    if (notifications.isNotEmpty) return;
-    notifications.addAll([
+  Future<void> _seedWelcomeNotifications(String uid) async {
+    final welcome = [
       AppNotification(
-        id: 'n1',
+        id: 'welcome',
         title: 'Welcome to Foodie',
         body: 'Order from nearby restaurants and track your delivery live.',
         createdAt: DateTime.now(),
       ),
       AppNotification(
-        id: 'n2',
+        id: 'promo',
         title: '20% off your first order',
         body: 'Use promo code FOOD20 at checkout.',
         createdAt: DateTime.now(),
       ),
-    ]);
+    ];
+    notifications.addAll(welcome);
+    for (final item in welcome) {
+      await _db.saveNotification(uid, item);
+    }
   }
 
-  Future<void> _persist() async {
+  Future<void> _persistOnboarding() async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(
-      _storageKey,
-      jsonEncode({
-        'seenOnboarding': seenOnboarding,
-        'currentEmail': currentUser?.email,
-        'users': users.map((user) => user.toJson()).toList(),
-        'addresses': addresses.map((item) => item.toJson()).toList(),
-        'cards': cards.map((item) => item.toJson()).toList(),
-        'selectedAddressId': selectedAddressId,
-        'selectedCardId': selectedCardId,
-        'favoriteFoodIds': favoriteFoodIds.toList(),
-        'cart': cart.map((item) => item.toJson()).toList(),
-        'orders': orders.map((item) => item.toJson()).toList(),
-        'notifications': notifications.map((item) => item.toJson()).toList(),
-      }),
-    );
+    await prefs.setBool(_onboardingKey, seenOnboarding);
   }
 
-  bool get isLoggedIn => currentUser != null;
+  Future<void> _persistUser() async {
+    final uid = currentUid;
+    final user = currentUser;
+    if (uid == null || user == null) {
+      return;
+    }
+    try {
+      await _db.saveUserSettings(
+        uid: uid,
+        user: user,
+        selectedAddressId: selectedAddressId,
+        selectedCardId: selectedCardId,
+        paymentMethod: paymentMethod,
+        favoriteFoodIds: favoriteFoodIds.toList(),
+      );
+    } catch (error) {
+      debugPrint('Error saving user settings: $error');
+    }
+  }
+
+  Future<void> _persistCart() async {
+    final uid = currentUid;
+    if (uid == null) {
+      return;
+    }
+    try {
+      await _db.saveCart(uid, cart);
+    } catch (error) {
+      debugPrint('Error saving cart: $error');
+    }
+  }
+
+  void _clearUserData() {
+    currentUser = null;
+    cart.clear();
+    orders.clear();
+    addresses.clear();
+    cards.clear();
+    favoriteFoodIds.clear();
+    notifications.clear();
+    selectedAddressId = null;
+    selectedCardId = null;
+    promoCode = null;
+    paymentMethod = 'Cash';
+  }
+
+  bool get isLoggedIn => currentUser != null || _auth.currentUser != null;
 
   AddressModel? get selectedAddress {
-    if (addresses.isEmpty) return null;
+    if (addresses.isEmpty) {
+      return null;
+    }
     return addresses.firstWhere(
       (item) => item.id == selectedAddressId,
       orElse: () => addresses.first,
@@ -213,7 +194,9 @@ class AppState extends ChangeNotifier {
   }
 
   PaymentCardModel? get selectedCard {
-    if (cards.isEmpty) return null;
+    if (cards.isEmpty) {
+      return null;
+    }
     return cards.firstWhere(
       (item) => item.id == selectedCardId,
       orElse: () => cards.first,
@@ -224,20 +207,28 @@ class AppState extends ChangeNotifier {
 
   double get subtotal => cart.fold(0, (sum, item) => sum + item.lineTotal);
 
-  double get discount =>
-      promoCode == 'FOOD20' ? subtotal * promoPercent : 0;
+  double get discount => promoCode == 'FOOD20' ? subtotal * promoPercent : 0;
 
   double get total => (subtotal - discount + deliveryFee).clamp(0, 99999);
 
   String get greeting {
     final hour = DateTime.now().hour;
-    if (hour < 12) return 'Good Morning!';
-    if (hour < 17) return 'Good Afternoon!';
+    if (hour < 12) {
+      return 'Good Morning!';
+    }
+    if (hour < 17) {
+      return 'Good Afternoon!';
+    }
     return 'Good Evening!';
   }
 
+  List<FoodItem> get menuFoods => _foods.isEmpty ? Catalog.foods : _foods;
+
+  List<Restaurant> get menuRestaurants =>
+      _restaurants.isEmpty ? Catalog.restaurants : _restaurants;
+
   List<FoodItem> get visibleFoods {
-    return Catalog.foods.where((food) {
+    return menuFoods.where((food) {
       final matchesCategory =
           selectedCategory == 'All' || food.category == selectedCategory;
       final query = searchQuery.trim().toLowerCase();
@@ -255,7 +246,7 @@ class AppState extends ChangeNotifier {
   }
 
   List<Restaurant> get visibleRestaurants {
-    return Catalog.restaurants.where((restaurant) {
+    return menuRestaurants.where((restaurant) {
       final query = searchQuery.trim().toLowerCase();
       final matchesQuery = query.isEmpty ||
           restaurant.name.toLowerCase().contains(query) ||
@@ -277,105 +268,207 @@ class AppState extends ChangeNotifier {
   List<OrderModel> get historyOrders =>
       orders.where((order) => order.status != OrderStatus.ongoing).toList();
 
-  void completeOnboarding() {
+  Future<void> completeOnboarding() async {
     seenOnboarding = true;
-    _persist();
+    await _persistOnboarding();
     notifyListeners();
   }
 
-  String? login(String email, String password) {
-    final user = users.cast<UserAccount?>().firstWhere(
-          (item) =>
-              item?.email.toLowerCase() == email.trim().toLowerCase() &&
-              item?.password == password,
-          orElse: () => null,
-        );
-    if (user == null) {
-      return 'Invalid email or password. Try demo@foodie.com / 123456';
+  Future<String?> login(String email, String password) async {
+    if (!_isValidEmail(email)) {
+      return 'Please enter a valid email';
     }
-    currentUser = user;
-    errorMessage = null;
-    _persist();
+    if (password.length < 6) {
+      return 'Password must be at least 6 characters';
+    }
+    busy = true;
     notifyListeners();
-    return null;
+    try {
+      final credential = await _auth.signInWithEmail(
+        email: email,
+        password: password,
+      );
+      await _loadSignedInUser(credential.user!);
+      errorMessage = null;
+      return null;
+    } catch (error) {
+      return AuthService.mapAuthError(error);
+    } finally {
+      busy = false;
+      notifyListeners();
+    }
   }
 
-  String? register({
+  Future<String?> register({
     required String name,
     required String email,
     required String password,
     required String confirmPassword,
-  }) {
-    if (name.trim().isEmpty) return 'Please enter your name';
-    if (!_isValidEmail(email)) return 'Please enter a valid email';
-    if (password.length < 6) return 'Password must be at least 6 characters';
-    if (password != confirmPassword) return 'Passwords do not match';
-    final exists = users.any(
-      (user) => user.email.toLowerCase() == email.trim().toLowerCase(),
-    );
-    if (exists) return 'An account with this email already exists';
-    final user = UserAccount(
-      name: name.trim(),
-      email: email.trim().toLowerCase(),
-      password: password,
-    );
-    users.add(user);
-    currentUser = user;
-    _persist();
+  }) async {
+    if (name.trim().isEmpty) {
+      return 'Please enter your name';
+    }
+    if (!_isValidEmail(email)) {
+      return 'Please enter a valid email';
+    }
+    if (password.length < 6) {
+      return 'Password must be at least 6 characters';
+    }
+    if (password != confirmPassword) {
+      return 'Passwords do not match';
+    }
+    busy = true;
     notifyListeners();
-    return null;
+    try {
+      final credential = await _auth.registerWithEmail(
+        name: name,
+        email: email,
+        password: password,
+      );
+      await _loadSignedInUser(credential.user!);
+      return null;
+    } catch (error) {
+      return AuthService.mapAuthError(error);
+    } finally {
+      busy = false;
+      notifyListeners();
+    }
   }
 
-  String? requestReset(String email) {
-    final exists = users.any(
-      (user) => user.email.toLowerCase() == email.trim().toLowerCase(),
-    );
-    if (!exists) return 'No account found for this email';
-    pendingResetEmail = email.trim().toLowerCase();
+  Future<String?> loginWithGoogle() async {
+    busy = true;
     notifyListeners();
-    return null;
+    try {
+      final credential = await _auth.signInWithGoogle();
+      if (credential?.user == null) {
+        return AuthCopy.googleCancelled;
+      }
+      await _loadSignedInUser(credential!.user!);
+      return null;
+    } catch (error) {
+      return AuthService.mapAuthError(error);
+    } finally {
+      busy = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> sendPhoneCode({
+    required String phoneNumber,
+    required void Function(String verificationId) onCodeSent,
+    required void Function(String message) onFailed,
+  }) async {
+    try {
+      await _auth.sendPhoneCode(
+        phoneNumber: phoneNumber,
+        onCodeSent: onCodeSent,
+        onAutoVerified: (credential) async {
+          try {
+            final result = await _auth.signInWithPhoneCredential(credential);
+            await _loadSignedInUser(result.user!);
+            notifyListeners();
+          } catch (error) {
+            onFailed(AuthService.mapAuthError(error));
+          }
+        },
+        onFailed: onFailed,
+      );
+    } catch (error) {
+      onFailed(AuthService.mapAuthError(error));
+    }
+  }
+
+  Future<String?> confirmPhoneCode({
+    required String verificationId,
+    required String smsCode,
+  }) async {
+    busy = true;
+    notifyListeners();
+    try {
+      final credential = await _auth.confirmPhoneCode(
+        verificationId: verificationId,
+        smsCode: smsCode,
+      );
+      await _loadSignedInUser(credential.user!);
+      return null;
+    } catch (error) {
+      return AuthService.mapAuthError(error);
+    } finally {
+      busy = false;
+      notifyListeners();
+    }
+  }
+
+  Future<String?> requestReset(String email) async {
+    if (!_isValidEmail(email)) {
+      return 'Please enter a valid email';
+    }
+    final normalized = email.trim().toLowerCase();
+    try {
+      await _auth.sendPasswordReset(normalized);
+      pendingResetEmail = normalized;
+      notifyListeners();
+      return null;
+    } on FirebaseAuthException catch (error) {
+      // Do not reveal whether the email is registered.
+      if (error.code == 'user-not-found') {
+        pendingResetEmail = normalized;
+        notifyListeners();
+        return null;
+      }
+      return AuthService.mapAuthError(error);
+    } catch (error) {
+      return AuthService.mapAuthError(error);
+    }
   }
 
   String? verifyOtp(String code) {
-    if (pendingResetEmail == null) return 'Request a code first';
-    if (code.trim() != demoOtp) return 'Invalid code. Use 1234 for demo';
+    if (pendingResetEmail == null) {
+      return 'Request a reset email first';
+    }
+    if (code.trim().isEmpty) {
+      return 'Enter the verification code';
+    }
     return null;
   }
 
   String? resetPassword(String password, String confirmPassword) {
-    if (pendingResetEmail == null) return 'Session expired';
-    if (password.length < 6) return 'Password must be at least 6 characters';
-    if (password != confirmPassword) return 'Passwords do not match';
-    final user = users.firstWhere(
-      (item) => item.email == pendingResetEmail,
-    );
-    user.password = password;
+    if (pendingResetEmail == null) {
+      return 'Session expired';
+    }
+    if (password.length < 6) {
+      return 'Password must be at least 6 characters';
+    }
+    if (password != confirmPassword) {
+      return 'Passwords do not match';
+    }
     pendingResetEmail = null;
-    _persist();
     notifyListeners();
     return null;
   }
 
-  void logout() {
-    currentUser = null;
-    cart.clear();
-    promoCode = null;
-    _persist();
+  Future<void> logout() async {
+    await _auth.signOut();
+    _clearUserData();
     notifyListeners();
   }
 
-  void updateProfile({
+  Future<void> updateProfile({
     required String name,
     required String email,
     required String phone,
     required String bio,
-  }) {
-    if (currentUser == null) return;
+  }) async {
+    if (currentUser == null) {
+      return;
+    }
     currentUser!
       ..name = name.trim()
+      ..email = email.trim()
       ..phone = phone.trim()
       ..bio = bio.trim();
-    _persist();
+    await _auth.updateDisplayName(name);
+    await _persistUser();
     notifyListeners();
   }
 
@@ -409,7 +502,7 @@ class AppState extends ChangeNotifier {
     } else {
       cart.add(CartLine(food: food, size: size, quantity: quantity));
     }
-    _persist();
+    _persistCart();
     notifyListeners();
   }
 
@@ -419,20 +512,19 @@ class AppState extends ChangeNotifier {
     } else {
       line.quantity = quantity;
     }
-    _persist();
+    _persistCart();
     notifyListeners();
   }
 
   void removeFromCart(CartLine line) {
     cart.remove(line);
-    _persist();
+    _persistCart();
     notifyListeners();
   }
 
   bool applyPromo(String code) {
     if (code.trim().toUpperCase() == 'FOOD20') {
       promoCode = 'FOOD20';
-      _persist();
       notifyListeners();
       return true;
     }
@@ -447,26 +539,29 @@ class AppState extends ChangeNotifier {
     } else {
       favoriteFoodIds.add(foodId);
     }
-    _persist();
+    _persistUser();
     notifyListeners();
   }
 
   bool isFavorite(String foodId) => favoriteFoodIds.contains(foodId);
 
-  List<FoodItem> get favoriteFoods => Catalog.foods
-      .where((food) => favoriteFoodIds.contains(food.id))
-      .toList();
+  List<FoodItem> get favoriteFoods =>
+      menuFoods.where((food) => favoriteFoodIds.contains(food.id)).toList();
 
   void addAddress(AddressModel address) {
     addresses.add(address);
     selectedAddressId = address.id;
-    _persist();
+    final uid = currentUid;
+    if (uid != null) {
+      _db.saveAddress(uid, address);
+    }
+    _persistUser();
     notifyListeners();
   }
 
   void selectAddress(String id) {
     selectedAddressId = id;
-    _persist();
+    _persistUser();
     notifyListeners();
   }
 
@@ -474,24 +569,31 @@ class AppState extends ChangeNotifier {
     cards.add(card);
     selectedCardId = card.id;
     paymentMethod = 'Card';
-    _persist();
+    final uid = currentUid;
+    if (uid != null) {
+      _db.saveCard(uid, card);
+    }
+    _persistUser();
     notifyListeners();
   }
 
   void selectCard(String id) {
     selectedCardId = id;
     paymentMethod = 'Card';
-    _persist();
+    _persistUser();
     notifyListeners();
   }
 
   void setPaymentMethod(String method) {
     paymentMethod = method;
+    _persistUser();
     notifyListeners();
   }
 
   OrderModel? placeOrder() {
-    if (cart.isEmpty) return null;
+    if (cart.isEmpty) {
+      return null;
+    }
     final snapshot = cart
         .map(
           (item) => CartLine(
@@ -516,6 +618,11 @@ class AppState extends ChangeNotifier {
     orders.insert(0, order);
     cart.clear();
     promoCode = null;
+    final uid = currentUid;
+    if (uid != null) {
+      _db.saveOrder(uid, order);
+      _persistCart();
+    }
     addNotification(
       'Order placed',
       'Order #${order.id} from ${order.restaurantName} is being prepared.',
@@ -528,8 +635,18 @@ class AppState extends ChangeNotifier {
           (item) => item?.id == id,
           orElse: () => null,
         );
-    if (order == null) return;
+    if (order == null) {
+      return;
+    }
     order.status = OrderStatus.cancelled;
+    final uid = currentUid;
+    if (uid != null) {
+      _db.updateOrderStatus(
+        uid: uid,
+        orderId: id,
+        status: OrderStatus.cancelled,
+      );
+    }
     addNotification('Order cancelled', 'Order #$id was cancelled.');
   }
 
@@ -538,25 +655,35 @@ class AppState extends ChangeNotifier {
           (item) => item?.id == id,
           orElse: () => null,
         );
-    if (order == null) return;
+    if (order == null) {
+      return;
+    }
     order.status = OrderStatus.delivered;
+    final uid = currentUid;
+    if (uid != null) {
+      _db.updateOrderStatus(
+        uid: uid,
+        orderId: id,
+        status: OrderStatus.delivered,
+      );
+    }
     addNotification('Order delivered', 'Order #$id has been delivered. Enjoy!');
   }
 
-  int get unreadCount =>
-      notifications.where((item) => !item.read).length;
+  int get unreadCount => notifications.where((item) => !item.read).length;
 
   void addNotification(String title, String body) {
-    notifications.insert(
-      0,
-      AppNotification(
-        id: DateTime.now().millisecondsSinceEpoch.toString(),
-        title: title,
-        body: body,
-        createdAt: DateTime.now(),
-      ),
+    final item = AppNotification(
+      id: DateTime.now().millisecondsSinceEpoch.toString(),
+      title: title,
+      body: body,
+      createdAt: DateTime.now(),
     );
-    _persist();
+    notifications.insert(0, item);
+    final uid = currentUid;
+    if (uid != null) {
+      _db.saveNotification(uid, item);
+    }
     notifyListeners();
   }
 
@@ -564,7 +691,10 @@ class AppState extends ChangeNotifier {
     for (final item in notifications) {
       item.read = true;
     }
-    _persist();
+    final uid = currentUid;
+    if (uid != null) {
+      _db.markNotificationsRead(uid, notifications);
+    }
     notifyListeners();
   }
 

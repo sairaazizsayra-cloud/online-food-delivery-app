@@ -1,17 +1,32 @@
 import 'package:firebase_auth/firebase_auth.dart';
+// RecaptchaVerifier needs the platform auth instance on web only.
+// ignore: depend_on_referenced_packages
+import 'package:firebase_auth_platform_interface/firebase_auth_platform_interface.dart';
 import 'package:flutter/foundation.dart';
 import 'package:food_application/core/firebase_constants.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 
 class AuthService {
   AuthService({FirebaseAuth? auth}) : _auth = auth ?? FirebaseAuth.instance {
-    if (!kIsWeb) {
-      GoogleSignIn.instance.initialize();
-    }
+    _googleReady = _prepareGoogleSignIn();
   }
 
   final FirebaseAuth _auth;
+  late final Future<void> _googleReady;
   ConfirmationResult? _webPhoneConfirmation;
+  RecaptchaVerifier? _webRecaptcha;
+
+  Future<void> _prepareGoogleSignIn() async {
+    if (kIsWeb) {
+      return;
+    }
+    await GoogleSignIn.instance.initialize(
+      clientId: defaultTargetPlatform == TargetPlatform.iOS
+          ? GoogleAuthConfig.iosClientId
+          : null,
+      serverClientId: GoogleAuthConfig.webClientId,
+    );
+  }
 
   Stream<User?> get authStateChanges => _auth.authStateChanges();
 
@@ -46,6 +61,7 @@ class AuthService {
         return _auth.signInWithPopup(GoogleAuthProvider());
       }
 
+      await _googleReady;
       final googleUser = await GoogleSignIn.instance.authenticate();
       final googleAuth = googleUser.authentication;
       return _auth.signInWithCredential(
@@ -78,21 +94,50 @@ class AuthService {
 
     if (kIsWeb) {
       try {
-        _webPhoneConfirmation = await _auth.signInWithPhoneNumber(normalized);
+        final verifier = _createWebRecaptcha();
+        _webPhoneConfirmation = await _auth.signInWithPhoneNumber(
+          normalized,
+          verifier,
+        );
         onCodeSent('web');
-      } on FirebaseAuthException catch (error) {
+      } catch (error) {
+        _clearWebRecaptcha();
         onFailed(mapAuthError(error));
       }
       return;
     }
 
-    await _auth.verifyPhoneNumber(
-      phoneNumber: normalized,
-      verificationCompleted: onAutoVerified,
-      verificationFailed: (error) => onFailed(mapAuthError(error)),
-      codeSent: (verificationId, _) => onCodeSent(verificationId),
-      codeAutoRetrievalTimeout: (_) {},
+    try {
+      await _auth.verifyPhoneNumber(
+        phoneNumber: normalized,
+        verificationCompleted: onAutoVerified,
+        verificationFailed: (error) => onFailed(mapAuthError(error)),
+        codeSent: (verificationId, _) => onCodeSent(verificationId),
+        codeAutoRetrievalTimeout: (_) {},
+      );
+    } catch (error) {
+      onFailed(mapAuthError(error));
+    }
+  }
+
+  RecaptchaVerifier _createWebRecaptcha() {
+    _clearWebRecaptcha();
+    _webRecaptcha = RecaptchaVerifier(
+      auth: FirebaseAuthPlatform.instance,
+      container: PhoneAuthConfig.recaptchaContainerId,
+      size: RecaptchaVerifierSize.compact,
+      theme: RecaptchaVerifierTheme.light,
     );
+    return _webRecaptcha!;
+  }
+
+  void _clearWebRecaptcha() {
+    try {
+      _webRecaptcha?.clear();
+    } catch (error) {
+      debugPrint('Error clearing reCAPTCHA: $error');
+    }
+    _webRecaptcha = null;
   }
 
   Future<UserCredential> confirmPhoneCode({
@@ -131,6 +176,7 @@ class AuthService {
   Future<void> signOut() async {
     try {
       if (!kIsWeb) {
+        await _googleReady;
         await GoogleSignIn.instance.signOut();
       }
       await _auth.signOut();
@@ -141,15 +187,32 @@ class AuthService {
   }
 
   static String? normalizePhoneNumber(String raw) {
-    final trimmed = raw.trim().replaceAll(' ', '');
-    if (trimmed.startsWith('+') && trimmed.length >= 10) {
-      return trimmed;
+    var trimmed = raw.trim().replaceAll(RegExp(r'[\s\-\(\)]'), '');
+    if (trimmed.startsWith('00')) {
+      trimmed = '+${trimmed.substring(2)}';
     }
+    if (trimmed.startsWith('+')) {
+      final digits = trimmed.substring(1).replaceAll(RegExp(r'\D'), '');
+      if (digits.length >= 10 && digits.length <= 15) {
+        return '+$digits';
+      }
+      return null;
+    }
+
     final digits = trimmed.replaceAll(RegExp(r'\D'), '');
+    if (digits.length == 11 && digits.startsWith('03')) {
+      return '${PhoneAuthConfig.defaultCountryCode}${digits.substring(1)}';
+    }
+    if (digits.length == 10 && digits.startsWith('3')) {
+      return '${PhoneAuthConfig.defaultCountryCode}$digits';
+    }
+    if (digits.length == 12 && digits.startsWith('92')) {
+      return '+$digits';
+    }
     if (digits.length == 10) {
       return '+1$digits';
     }
-    if (digits.length >= 11) {
+    if (digits.length >= 11 && digits.length <= 15) {
       return '+$digits';
     }
     return null;
@@ -173,6 +236,7 @@ class AuthService {
         case 'too-many-requests':
           return 'Too many attempts. Please try again later';
         case 'invalid-phone-number':
+        case 'missing-phone-number':
           return AuthCopy.phoneRequired;
         case 'invalid-verification-code':
           return 'The SMS code is invalid';
@@ -180,6 +244,15 @@ class AuthService {
           return 'The SMS code expired. Request a new one';
         case 'operation-not-allowed':
           return 'This sign-in method is not enabled yet';
+        case 'unauthorized-domain':
+        case 'auth/unauthorized-domain':
+          return AuthCopy.unauthorizedDomain;
+        case 'captcha-check-failed':
+        case 'invalid-app-credential':
+        case 'missing-client-identifier':
+          return AuthCopy.phoneCaptchaFailed;
+        case 'quota-exceeded':
+          return AuthCopy.phoneQuota;
         case 'network-request-failed':
           return 'Network error. Check your connection';
         default:

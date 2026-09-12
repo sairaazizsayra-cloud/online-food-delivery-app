@@ -37,10 +37,23 @@
   "auth": {
     "providers": {
       "emailPassword": true,
+      "phone": true,
       "googleSignIn": {
         "oAuthBrandDisplayName": "Foodie",
-        "supportEmail": "sairaaziz.sayra@gmail.com"
+        "supportEmail": "sairaaziz.sayra@gmail.com",
+        "authorizedRedirectUris": [
+          "http://localhost",
+          "http://127.0.0.1",
+          "https://food-application-9e7f2.firebaseapp.com",
+          "https://food-application-9e7f2.web.app"
+        ]
       }
-    }
+    },
+    "authorizedDomains": [
+      "localhost",
+      "127.0.0.1",
+      "food-application-9e7f2.firebaseapp.com",
+      "food-application-9e7f2.web.app"
+    ]
   }
 }

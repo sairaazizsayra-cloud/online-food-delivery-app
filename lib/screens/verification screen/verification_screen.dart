@@ -8,7 +8,9 @@ import 'package:pin_code_fields/pin_code_fields.dart';
 import 'package:provider/provider.dart';
 
 class VerificationScreen extends StatefulWidget {
-  const VerificationScreen({super.key});
+  const VerificationScreen({super.key, this.email});
+
+  final String? email;
 
   @override
   State<VerificationScreen> createState() => _VerificationScreenState();
@@ -40,7 +42,7 @@ class _VerificationScreenState extends State<VerificationScreen> {
     });
   }
 
-  void _reset() {
+  void _resetPassword() {
     final error = context.read<AppState>().resetPassword(
           passwordController.text,
           confirmController.text,
@@ -55,10 +57,14 @@ class _VerificationScreenState extends State<VerificationScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final email = context.watch<AppState>().pendingResetEmail ?? 'your email';
+    final email = widget.email?.trim() ?? '';
     return AuthScaffold(
-      title: 'Verification',
-      subtitle: verified ? 'Set a new password' : 'We sent a code to $email',
+      title: verified ? 'Reset Password' : 'Verification',
+      subtitle: verified
+          ? 'Enter your new password'
+          : email.isEmpty
+              ? 'Enter the 4-digit code sent to your email'
+              : 'Enter the 4-digit code sent to $email',
       child: SingleChildScrollView(
         padding: const EdgeInsets.all(25),
         child: Column(
@@ -80,27 +86,38 @@ class _VerificationScreenState extends State<VerificationScreen> {
                   focusedBorderColor: AppColors.primary,
                 ),
               ),
-              if (errorText != null)
-                Text(errorText!, style: const TextStyle(color: Colors.red)),
-              const SizedBox(height: 16),
-              PrimaryButton(label: 'VERIFY', onPressed: _verify),
-              const SizedBox(height: 8),
-              const Text('Use 1234 for the demo OTP'),
             ] else ...[
-              const Text('NEW PASSWORD', style: TextStyle(fontWeight: FontWeight.bold)),
+              const Text(
+                'PASSWORD',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
               const SizedBox(height: 8),
-              AppField(controller: passwordController, hint: '********', obscure: true),
+              AppField(
+                controller: passwordController,
+                hint: '********',
+                obscure: true,
+              ),
               const SizedBox(height: 14),
-              const Text('CONFIRM PASSWORD', style: TextStyle(fontWeight: FontWeight.bold)),
+              const Text(
+                'RE-TYPE PASSWORD',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
               const SizedBox(height: 8),
-              AppField(controller: confirmController, hint: '********', obscure: true),
-              if (errorText != null) ...[
-                const SizedBox(height: 10),
-                Text(errorText!, style: const TextStyle(color: Colors.red)),
-              ],
-              const SizedBox(height: 20),
-              PrimaryButton(label: 'RESET PASSWORD', onPressed: _reset),
+              AppField(
+                controller: confirmController,
+                hint: '********',
+                obscure: true,
+              ),
             ],
+            if (errorText != null) ...[
+              const SizedBox(height: 10),
+              Text(errorText!, style: const TextStyle(color: Colors.red)),
+            ],
+            const SizedBox(height: 24),
+            PrimaryButton(
+              label: verified ? 'RESET PASSWORD' : 'VERIFY',
+              onPressed: verified ? _resetPassword : _verify,
+            ),
           ],
         ),
       ),

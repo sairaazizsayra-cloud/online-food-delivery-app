@@ -85,13 +85,16 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
             const SizedBox(height: 24),
             PrimaryButton(
               label: 'SAVE',
-              onPressed: () {
-                context.read<AppState>().updateProfile(
+              onPressed: () async {
+                await context.read<AppState>().updateProfile(
                       name: nameController.text,
                       email: emailController.text,
                       phone: phoneController.text,
                       bio: bioController.text,
                     );
+                if (!context.mounted) {
+                  return;
+                }
                 showAppSnack(context, 'Profile saved');
                 Navigator.pop(context);
               },

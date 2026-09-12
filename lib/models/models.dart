@@ -270,7 +270,7 @@ class OrderModel {
   OrderStatus status;
   final String restaurantName;
 
-  int get itemCount => items.fold(0, (sum, item) => sum + item.quantity);
+  int get itemCount => items.fold(0, (total, item) => total + item.quantity);
 
   String get summary {
     if (items.isEmpty) return '0 items';

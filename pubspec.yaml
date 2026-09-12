@@ -58,7 +58,12 @@ dev_dependencies:
   # package. See that file for information about deactivating specific lint
   # rules and activating additional ones.
   flutter_lints: ^6.0.0
-  
+
+# firebase_core_web 3.11.0 needs Dart 3.12+ (e.isA on Object).
+# Pin 3.10.0 so Chrome builds on the current SDK.
+dependency_overrides:
+  firebase_core_web: 3.10.0
+
 
 
 

@@ -2,8 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:food_application/core/app_colors.dart';
 import 'package:food_application/core/app_nav.dart';
-import 'package:food_application/screens/forgot%20password%20screen/forgot_password_screeb.dart';
+import 'package:food_application/screens/forgot%20password%20screen/forgot_password_screen.dart';
 import 'package:food_application/screens/location%20access%20screen/location_access_screen.dart';
+import 'package:food_application/screens/phone%20login%20screen/phone_login_screen.dart';
 import 'package:food_application/screens/sign%20up%20screen/sign_up_screen.dart';
 import 'package:food_application/state/app_state.dart';
 import 'package:food_application/widgets/common_widgets.dart';
@@ -17,11 +18,12 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  final emailController = TextEditingController(text: 'demo@foodie.com');
-  final passwordController = TextEditingController(text: '123456');
+  final emailController = TextEditingController();
+  final passwordController = TextEditingController();
   bool rememberMe = true;
   bool obscure = true;
   String? errorText;
+  bool submitting = false;
 
   @override
   void dispose() {
@@ -30,16 +32,39 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
-  void _login() {
-    final error = context.read<AppState>().login(
-          emailController.text,
-          passwordController.text,
-        );
+  Future<void> _afterAuth(String? error) async {
+    if (!mounted) {
+      return;
+    }
     if (error != null) {
-      setState(() => errorText = error);
+      setState(() {
+        errorText = error;
+        submitting = false;
+      });
       return;
     }
     AppNav.offAll(context, const LocationAccessScreen());
+  }
+
+  Future<void> _login() async {
+    setState(() {
+      submitting = true;
+      errorText = null;
+    });
+    final error = await context.read<AppState>().login(
+          emailController.text,
+          passwordController.text,
+        );
+    await _afterAuth(error);
+  }
+
+  Future<void> _google() async {
+    setState(() {
+      submitting = true;
+      errorText = null;
+    });
+    final error = await context.read<AppState>().loginWithGoogle();
+    await _afterAuth(error);
   }
 
   @override
@@ -90,12 +115,19 @@ class _LoginScreenState extends State<LoginScreen> {
                 Checkbox(
                   value: rememberMe,
                   activeColor: AppColors.primary,
-                  onChanged: (value) => setState(() => rememberMe = value ?? false),
+                  onChanged: (value) =>
+                      setState(() => rememberMe = value ?? false),
                 ),
-                const Text('Remember me', style: TextStyle(color: Color(0xFF7E8A97))),
+                const Text(
+                  'Remember me',
+                  style: TextStyle(color: Color(0xFF7E8A97)),
+                ),
                 const Spacer(),
                 TextButton(
-                  onPressed: () => AppNav.to(context, const ForgotPasswordScreen()),
+                  onPressed: () => AppNav.to(
+                    context,
+                    ForgotPasswordScreen(email: emailController.text),
+                  ),
                   child: const Text(
                     'Forgot password',
                     style: TextStyle(color: AppColors.primary),
@@ -104,7 +136,10 @@ class _LoginScreenState extends State<LoginScreen> {
               ],
             ),
             const SizedBox(height: 8),
-            PrimaryButton(label: 'LOG IN', onPressed: _login),
+            PrimaryButton(
+              label: submitting ? 'PLEASE WAIT' : 'LOG IN',
+              onPressed: submitting ? null : _login,
+            ),
             const SizedBox(height: 12),
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
@@ -127,33 +162,31 @@ class _LoginScreenState extends State<LoginScreen> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: [
-                _social(FontAwesomeIcons.facebookF, const Color(0xFF4267B2), 'facebook'),
-                _social(FontAwesomeIcons.twitter, const Color(0xFF1DA1F2), 'twitter'),
-                _social(FontAwesomeIcons.apple, const Color(0xFF1D1F2E), 'apple'),
+                FloatingActionButton(
+                  heroTag: 'google',
+                  backgroundColor: const Color(0xFFDB4437),
+                  onPressed: submitting ? null : _google,
+                  child: const FaIcon(
+                    FontAwesomeIcons.google,
+                    color: Colors.white,
+                  ),
+                ),
+                FloatingActionButton(
+                  heroTag: 'phone',
+                  backgroundColor: AppColors.primary,
+                  onPressed: submitting
+                      ? null
+                      : () => AppNav.to(context, const PhoneLoginScreen()),
+                  child: const FaIcon(
+                    FontAwesomeIcons.phone,
+                    color: Colors.white,
+                  ),
+                ),
               ],
-            ),
-            const SizedBox(height: 16),
-            const Center(
-              child: Text(
-                'Demo: demo@foodie.com / 123456',
-                style: TextStyle(color: AppColors.muted, fontSize: 12),
-              ),
             ),
           ],
         ),
       ),
-    );
-  }
-
-  Widget _social(FaIconData icon, Color color, String tag) {
-    return FloatingActionButton(
-      heroTag: tag,
-      backgroundColor: color,
-      onPressed: () {
-        context.read<AppState>().login('demo@foodie.com', '123456');
-        AppNav.offAll(context, const LocationAccessScreen());
-      },
-      child: FaIcon(icon, color: Colors.white),
     );
   }
 }

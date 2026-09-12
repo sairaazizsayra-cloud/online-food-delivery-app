@@ -37,9 +37,31 @@ class AppFieldLimits {
   static const int quantityMax = 20;
 }
 
+class GoogleAuthConfig {
+  static const String webClientId =
+      '407362360050-gc3kulf9e2qj081njld890o86qg5a7gn.apps.googleusercontent.com';
+  static const String iosClientId =
+      '407362360050-b6vntvj1u4f3l96tarprdv1urtl6v2np.apps.googleusercontent.com';
+}
+
+class PhoneAuthConfig {
+  static const String defaultCountryCode = '+92';
+  static const String recaptchaContainerId = 'recaptcha-container';
+}
+
 class AuthCopy {
   static const String defaultBio = 'I love fast food';
   static const String googleCancelled = 'Google sign-in was cancelled';
   static const String phoneRequired =
-      'Enter a valid phone number with country code';
+      'Enter a valid mobile number, e.g. 0300 1234567';
+  static const String unauthorizedDomain =
+      'This site is not authorized for Google sign-in yet';
+  static const String phoneCaptchaFailed =
+      'Complete the security check, then send the code again';
+  static const String phoneQuota =
+      'SMS limit reached. Try again later or use email login';
+  static const String resetEmailSent =
+      'A password reset link was sent. Open it to set a new password, then log in.';
+  static const String resetEmailHint =
+      'Please enter your email to reset password';
 }
