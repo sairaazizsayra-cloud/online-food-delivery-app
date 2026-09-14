@@ -58,6 +58,28 @@ dev_dependencies:
   # package. See that file for information about deactivating specific lint
   # rules and activating additional ones.
   flutter_lints: ^6.0.0
+  flutter_launcher_icons: ^0.14.4
+
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: images/app_icon.png
+  min_sdk_android: 21
+  remove_alpha_ios: true
+  adaptive_icon_background: "#111022"
+  adaptive_icon_foreground: images/app_icon.png
+  web:
+    generate: true
+    image_path: images/app_icon.png
+    background_color: "#111022"
+    theme_color: "#FF7622"
+  windows:
+    generate: true
+    image_path: images/app_icon.png
+    icon_size: 48
+  macos:
+    generate: true
+    image_path: images/app_icon.png
 
 # firebase_core_web 3.11.0 needs Dart 3.12+ (e.isA on Object).
 # Pin 3.10.0 so Chrome builds on the current SDK.
